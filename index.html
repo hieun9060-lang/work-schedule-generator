@@ -425,6 +425,10 @@
                             let scoreA = workersA - (empOffsWeekA * 2); 
                             let scoreB = workersB - (empOffsWeekB * 2);
                             
+                            // 점수가 같다면 랜덤으로 섞어서 매번 다른 패턴의 근무표가 나오게 함
+                            if (scoreA === scoreB) {
+                                return Math.random() - 0.5;
+                            }
                             return scoreB - scoreA;
                         });
 
@@ -458,6 +462,11 @@
                     alternateDays.sort((a, b) => {
                         let wA = parsedEmployees.filter(e => !finalOffs[e.id].has(a) && !finalPtos[e.id].has(a)).length;
                         let wB = parsedEmployees.filter(e => !finalOffs[e.id].has(b) && !finalPtos[e.id].has(b)).length;
+                        
+                        // 대체 휴무일도 동일 조건 시 랜덤 배정
+                        if (wA === wB) {
+                            return Math.random() - 0.5;
+                        }
                         return wB - wA; 
                     });
                     
