@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10월 근무표 생성기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            .print-w-full { width: 100% !important; max-width: none !important; }
+            body { background-color: white !important; }
+            .calendar-cell { break-inside: avoid; }
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans p-4 md:p-8">
+
+    <div id="app" class="max-w-7xl mx-auto space-y-6 print-w-full">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100 no-print">
+            <div>
+                <h1 id="main-title" class="text-2xl font-bold text-slate-900">🗓️ 자동 근무표 생성기</h1>
+                <p class="text-slate-500 mt-1 text-sm">설정된 연/월 및 휴무일 수에 맞춰 스케줄이 자동으로 구성됩니다.</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex gap-2">
+                <button onclick="window.print()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors text-sm flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    출력하기
+                </button>
+                <button onclick="app.generateSchedule()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    근무표 자동 생성
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 no-print flex flex-col md:flex-row gap-4 items-end">
+            <div class="w-full md:w-auto flex-1">
+                <label class="block text-sm font-medium text-slate-700 mb-1">연도</label>
+                <select id="year-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                    <!-- JS Injected -->
+                </select>
+            </div>
+            <div class="w-full md:w-auto flex-1">
+                <label class="block text-sm font-medium text-slate-700 mb-1">월</label>
+                <select id="month-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                    <!-- JS Injected -->
+                </select>
+            </div>
+            <div class="w-full md:w-auto flex-[2]">
+                <label class="block text-sm font-medium text-slate-700 mb-1">평일 공휴일 (일만 입력, 쉼표 구분)</label>
+                <input type="text" id="holidays-input" placeholder="예: 3, 9" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+            </div>
+        </div>
+
+        <!-- Employee Setup -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden no-print">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <h2 class="font-semibold text-slate-800">👥 팀원 근무 설정</h2>
+                    <span id="employee-count-badge" class="text-xs text-slate-500 bg-slate-200 px-2 py-1 rounded-md">총 8명</span>
+                </div>
+                <button onclick="app.addEmployee()" class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    인원 추가
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left whitespace-nowrap">
+                    <thead class="text-xs text-slate-500 bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th class="px-6 py-3 font-medium">이름</th>
+                            <th class="px-2 py-3 font-medium text-center">1주차</th>
+                            <th class="px-2 py-3 font-medium text-center">2주차</th>
+                            <th class="px-2 py-3 font-medium text-center">3주차</th>
+                            <th class="px-2 py-3 font-medium text-center">4주차</th>
+                            <th class="px-2 py-3 font-medium text-center">5주차</th>
+                            <th class="px-6 py-3 font-medium">휴무 요청일 (쉼표 구분)</th>
+                            <th class="px-6 py-3 font-medium">연차 사용일 (쉼표 구분)</th>
+                            <th class="px-6 py-3 font-medium w-full">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employee-tbody" class="divide-y divide-slate-100">
+                        <!-- JS injected rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Warnings Container -->
+        <div id="warnings-container" class="hidden no-print"></div>
+
+        <!-- Results Container -->
+        <div id="results-container" class="hidden space-y-6">
+            
+            <!-- Statistics -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 no-print" id="stats-container">
+                <!-- JS injected stats -->
+            </div>
+
+            <!-- Calendar View -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="px-6 py-5 border-b border-slate-100 bg-white text-center flex flex-col items-center">
+                    <h2 id="calendar-title" class="text-xl font-bold text-slate-800">근무표</h2>
+                    <div id="month-summary" class="text-sm font-medium text-indigo-600 mt-2 bg-indigo-50 px-3 py-1 rounded-full hidden">
+                        <!-- JS injected summary -->
+                    </div>
+                </div>
+                <div class="bg-slate-200 grid grid-cols-7 gap-px border-t border-slate-200" id="calendar-grid">
+                    <!-- Days Header -->
+                    <div class="bg-slate-50 py-2 text-center text-red-500 font-semibold text-sm">일</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">월</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">화</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">수</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">목</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">금</div>
+                    <div class="bg-slate-50 py-2 text-center text-blue-500 font-semibold text-sm">토</div>
+                    <!-- JS injected calendar cells -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        
+        let db, auth, userId;
+        let isFirebaseReady = false;
+
+        async function initFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) return false;
+                const fbApp = initializeApp(firebaseConfig);
+                db = getFirestore(fbApp);
+                auth = getAuth(fbApp);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser.uid;
+                isFirebaseReady = true;
+                return true;
+            } catch (error) {
+                console.error("Firebase initialization error:", error);
+                return false;
+            }
+        }
+
+        async function saveToFirestore(state) {
+            if (!isFirebaseReady || !userId) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'scheduleData', 'latest');
+                await setDoc(docRef, state);
+            } catch (error) {
+                console.error("Error saving data:", error);
+            }
+        }
+
+        async function loadFromFirestore() {
+            if (!isFirebaseReady || !userId) return null;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'scheduleData', 'latest');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) return docSnap.data();
+            } catch (error) {
+                console.error("Error loading data:", error);
+            }
+            return null;
+        }
+
+        const app = (() => {
+            // State
+            const shifts = ['07:30 - 16:30', '09:00 - 18:00', '10:00 - 19:00', '12:00 - 21:00'];
+            let employees = [
+                { id: 1, name: '김민수', shiftW1: '09:00 - 18:00', shiftW2: '12:00 - 21:00', shiftW3: '09:00 - 18:00', shiftW4: '12:00 - 21:00', shiftW5: '09:00 - 18:00', reqOffs: '2, 9', pto: '16' },
+                { id: 2, name: '이영희', shiftW1: '12:00 - 21:00', shiftW2: '09:00 - 18:00', shiftW3: '12:00 - 21:00', shiftW4: '09:00 - 18:00', shiftW5: '12:00 - 21:00', reqOffs: '3, 4', pto: '' },
+                { id: 3, name: '박철수', shiftW1: '09:00 - 18:00', shiftW2: '12:00 - 21:00', shiftW3: '09:00 - 18:00', shiftW4: '12:00 - 21:00', shiftW5: '09:00 - 18:00', reqOffs: '10, 11', pto: '' },
+                { id: 4, name: '최지우', shiftW1: '10:00 - 19:00', shiftW2: '09:00 - 18:00', shiftW3: '10:00 - 19:00', shiftW4: '09:00 - 18:00', shiftW5: '10:00 - 19:00', reqOffs: '5, 12', pto: '25' },
+                { id: 5, name: '정동환', shiftW1: '12:00 - 21:00', shiftW2: '09:00 - 18:00', shiftW3: '12:00 - 21:00', shiftW4: '09:00 - 18:00', shiftW5: '12:00 - 21:00', reqOffs: '20, 21', pto: '' },
+                { id: 6, name: '강슬기', shiftW1: '09:00 - 18:00', shiftW2: '10:00 - 19:00', shiftW3: '09:00 - 18:00', shiftW4: '10:00 - 19:00', shiftW5: '09:00 - 18:00', reqOffs: '8, 9', pto: '' },
+                { id: 7, name: '이아침', shiftW1: '07:30 - 16:30', shiftW2: '07:30 - 16:30', shiftW3: '07:30 - 16:30', shiftW4: '07:30 - 16:30', shiftW5: '07:30 - 16:30', reqOffs: '', pto: '' },
+                { id: 8, name: '박오전', shiftW1: '10:00 - 19:00', shiftW2: '10:00 - 19:00', shiftW3: '10:00 - 19:00', shiftW4: '10:00 - 19:00', shiftW5: '10:00 - 19:00', reqOffs: '', pto: '' },
+            ];
+            let generatedSchedule = [];
+            let employeeStats = {};
+            let currentMonthInfo = {};
+
+            // DOM Elements
+            const tbody = document.getElementById('employee-tbody');
+            const resultsContainer = document.getElementById('results-container');
+            const calendarGrid = document.getElementById('calendar-grid');
+            const warningsContainer = document.getElementById('warnings-container');
+            const statsContainer = document.getElementById('stats-container');
+            
+            // New DOM Elements
+            const yearSelect = document.getElementById('year-select');
+            const monthSelect = document.getElementById('month-select');
+            const holidaysInput = document.getElementById('holidays-input');
+            const mainTitle = document.getElementById('main-title');
+            const calendarTitle = document.getElementById('calendar-title');
+            const monthSummary = document.getElementById('month-summary');
+
+            // Save state to Firebase
+            function saveState() {
+                let sanitizedMonthInfo = { ...currentMonthInfo };
+                if (sanitizedMonthInfo.holidaySet instanceof Set) {
+                    sanitizedMonthInfo.holidaySet = Array.from(sanitizedMonthInfo.holidaySet);
+                }
+
+                saveToFirestore({
+                    year: yearSelect.value,
+                    month: monthSelect.value,
+                    holidays: holidaysInput.value,
+                    employees: employees,
+                    generatedSchedule: generatedSchedule,
+                    employeeStats: employeeStats,
+                    currentMonthInfo: sanitizedMonthInfo
+                });
+            }
+
+            // Load state from Firebase
+            async function loadState() {
+                const data = await loadFromFirestore();
+                if (data) {
+                    if (data.year) yearSelect.value = data.year;
+                    if (data.month) monthSelect.value = data.month;
+                    if (data.holidays !== undefined) holidaysInput.value = data.holidays;
+                    if (data.employees) employees = data.employees;
+                    if (data.generatedSchedule) generatedSchedule = data.generatedSchedule;
+                    if (data.employeeStats) employeeStats = data.employeeStats;
+                    if (data.currentMonthInfo) {
+                        currentMonthInfo = data.currentMonthInfo;
+                        if (Array.isArray(currentMonthInfo.holidaySet)) {
+                            currentMonthInfo.holidaySet = new Set(currentMonthInfo.holidaySet);
+                        }
+                    }
+                    
+                    renderTable();
+                    if (generatedSchedule && generatedSchedule.length > 0) {
+                        mainTitle.innerHTML = `🗓️ ${currentMonthInfo.year}년 ${currentMonthInfo.month}월 자동 근무표 생성기`;
+                        calendarTitle.innerHTML = `${currentMonthInfo.year}년 ${currentMonthInfo.month}월 근무표`;
+                        monthSummary.innerHTML = `이 달의 총 주말: ${currentMonthInfo.weekends}일 + 평일 공휴일: ${currentMonthInfo.holidayCount}일 = 1인당 총 휴무일 <strong>${currentMonthInfo.totalOffDays}일</strong> 자동 배정 (연차 별도)`;
+                        monthSummary.classList.remove('hidden');
+                        renderResults();
+                    }
+                }
+            }
+
+            // Initialize Setup Controls
+            function initControls() {
+                const today = new Date();
+                let yearHTML = '';
+                for(let y = 2024; y <= 2030; y++) {
+                    yearHTML += `<option value="${y}" ${y === today.getFullYear() ? 'selected' : ''}>${y}년</option>`;
+                }
+                yearSelect.innerHTML = yearHTML;
+
+                let monthHTML = '';
+                for(let m = 1; m <= 12; m++) {
+                    monthHTML += `<option value="${m}" ${m === today.getMonth() + 1 ? 'selected' : ''}>${m}월</option>`;
+                }
+                monthSelect.innerHTML = monthHTML;
+            }
+            
+            // Calculate Month Metrics
+            function calculateMonthInfo() {
+                const year = parseInt(yearSelect.value);
+                const month = parseInt(monthSelect.value);
+                const daysInMonth = new Date(year, month, 0).getDate();
+                const startDay = new Date(year, month - 1, 1).getDay(); // 0:Sun, 6:Sat
+                
+                let weekends = 0;
+                let holidayCount = 0;
+                let holidayStr = holidaysInput.value || "";
+                let holidayArr = holidayStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= daysInMonth);
+                let holidaySet = new Set(holidayArr);
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    let dayOfWeek = (startDay + d - 1) % 7;
+                    let isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+                    if (isWeekend) {
+                        weekends++;
+                    } else if (holidaySet.has(d)) {
+                        holidayCount++;
+                    }
+                }
+                
+                let totalOffDays = weekends + holidayCount;
+                
+                return {
+                    year, month, daysInMonth, startDay, weekends, holidayCount, totalOffDays, holidaySet
+                };
+            }
+
+            // Render Initial Table
+            function renderTable() {
+                const countBadge = document.getElementById('employee-count-badge');
+                if (countBadge) countBadge.innerText = `총 ${employees.length}명`;
+                
+                tbody.innerHTML = '';
+                employees.forEach((emp, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-slate-50/50 transition-colors bg-white';
+                    row.innerHTML = `
+                        <td class="px-4 py-3">
+                            <input type="text" value="${emp.name}" onchange="app.updateEmployee(${index}, 'name', this.value)" class="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                        </td>
+                        <td class="px-1 py-3 text-center">
+                            <select onchange="app.updateEmployee(${index}, 'shiftW1', this.value)" class="w-24 px-1 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                                ${shifts.map(s => `<option value="${s}" ${emp.shiftW1 === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td class="px-1 py-3 text-center">
+                            <select onchange="app.updateEmployee(${index}, 'shiftW2', this.value)" class="w-24 px-1 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                                ${shifts.map(s => `<option value="${s}" ${emp.shiftW2 === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td class="px-1 py-3 text-center">
+                            <select onchange="app.updateEmployee(${index}, 'shiftW3', this.value)" class="w-24 px-1 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                                ${shifts.map(s => `<option value="${s}" ${emp.shiftW3 === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td class="px-1 py-3 text-center">
+                            <select onchange="app.updateEmployee(${index}, 'shiftW4', this.value)" class="w-24 px-1 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                                ${shifts.map(s => `<option value="${s}" ${emp.shiftW4 === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td class="px-1 py-3 text-center">
+                            <select onchange="app.updateEmployee(${index}, 'shiftW5', this.value)" class="w-24 px-1 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                                ${shifts.map(s => `<option value="${s}" ${emp.shiftW5 === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td class="px-4 py-3">
+                            <input type="text" value="${emp.reqOffs}" placeholder="예: 5, 12" onchange="app.updateEmployee(${index}, 'reqOffs', this.value)" class="w-full max-w-[7rem] px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                        </td>
+                        <td class="px-4 py-3">
+                            <input type="text" value="${emp.pto || ''}" placeholder="예: 7, 24" onchange="app.updateEmployee(${index}, 'pto', this.value)" class="w-full max-w-[7rem] px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                        </td>
+                        <td class="px-6 py-3 text-right">
+                            <button onclick="app.removeEmployee(${index})" class="text-red-500 hover:text-red-700 p-1.5 rounded-md hover:bg-red-50 transition-colors" title="직원 삭제">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+
+            // Update state
+            function updateEmployee(index, field, value) {
+                employees[index][field] = value;
+                saveState();
+            }
+
+            // Add new employee
+            function addEmployee() {
+                const newId = employees.length > 0 ? Math.max(...employees.map(e => e.id)) + 1 : 1;
+                employees.push({
+                    id: newId,
+                    name: '새 직원',
+                    shiftW1: '09:00 - 18:00',
+                    shiftW2: '12:00 - 21:00',
+                    shiftW3: '09:00 - 18:00',
+                    shiftW4: '12:00 - 21:00',
+                    shiftW5: '09:00 - 18:00',
+                    reqOffs: '',
+                    pto: ''
+                });
+                renderTable();
+                saveState();
+            }
+
+            // Remove employee
+            function removeEmployee(index) {
+                if (employees.length <= 4) {
+                    // 최소 근무 인원이 4명이므로 4명 이하는 삭제 불가능
+                    warningsContainer.innerHTML = `
+                        <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl shadow-sm text-sm">
+                            <div class="flex items-center gap-2 font-semibold mb-1">
+                                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                삭제 불가
+                            </div>
+                            하루 최소 근무 보장 인원(4명)을 맞추기 위해 직원은 4명 이상 유지되어야 합니다.
+                        </div>`;
+                    warningsContainer.classList.remove('hidden');
+                    setTimeout(() => { warningsContainer.classList.add('hidden'); }, 3000);
+                    return;
+                }
+                employees.splice(index, 1);
+                renderTable();
+                saveState();
+            }
+
+            // Utility to parse requested off days
+            function parseOffDays(str) {
+                if (!str) return [];
+                return str.split(',')
+                    .map(s => parseInt(s.trim()))
+                    .filter(n => !isNaN(n) && n >= 1 && n <= 31);
+            }
+
+            // Get standard calendar week index for Oct 2026 (Starts on Thursday)
+            // Row 0: 1-3
+            // Row 1: 4-10
+            // Row 2: 11-17
+            // Row 3: 18-24
+            // Row 4: 25-31
+            function getWeekIndex(day) {
+                if (day <= 3) return 0;
+                if (day <= 10) return 1;
+                if (day <= 17) return 2;
+                if (day <= 24) return 3;
+                return 4;
+            }
+
+            // Shift display styling
+            function getShiftBadge(shift) {
+                if (shift.includes('07:30')) return '<span class="inline-block w-2 h-2 rounded-full bg-orange-500 mr-1"></span>07:30~16:30';
+                if (shift.includes('09:00')) return '<span class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>09~18';
+                if (shift.includes('10:00')) return '<span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1"></span>10~19';
+                if (shift.includes('12:00')) return '<span class="inline-block w-2 h-2 rounded-full bg-purple-500 mr-1"></span>12~21';
+                return shift;
+            }
+
+            // Main Scheduling Algorithm
+            function generateSchedule() {
+                warningsContainer.innerHTML = '';
+                warningsContainer.classList.add('hidden');
+                let warnings = [];
+                
+                currentMonthInfo = calculateMonthInfo();
+                const { year, month, daysInMonth, startDay, totalOffDays, holidaySet } = currentMonthInfo;
+                
+                // Update Titles
+                mainTitle.innerHTML = `🗓️ ${year}년 ${month}월 자동 근무표 생성기`;
+                calendarTitle.innerHTML = `${year}년 ${month}월 근무표`;
+                monthSummary.innerHTML = `이 달의 총 주말: ${currentMonthInfo.weekends}일 + 평일 공휴일: ${currentMonthInfo.holidayCount}일 = 1인당 총 휴무일 <strong>${totalOffDays}일</strong> 자동 배정 (연차 별도)`;
+                monthSummary.classList.remove('hidden');
+
+                // Parse requests
+                let parsedEmployees = employees.map(emp => {
+                    let ptoArr = parseOffDays(emp.pto || '').filter(d => d <= daysInMonth);
+                    let reqArr = parseOffDays(emp.reqOffs).filter(d => d <= daysInMonth && !ptoArr.includes(d)); // 연차와 중복 제거
+                    
+                    // Ensure requested off days don't exceed total allowed
+                    if (reqArr.length > totalOffDays) {
+                        warnings.push(`${emp.name}님의 휴무 요청(${reqArr.length}일)이 할당된 총 휴무일(${totalOffDays}일)을 초과하여 앞의 일정만 반영됩니다.`);
+                        reqArr = reqArr.slice(0, totalOffDays);
+                    }
+                    return {
+                        ...emp,
+                        reqOffsArr: reqArr,
+                        ptoArr: ptoArr
+                    };
+                });
+
+                // --- NEW: '안한', '최정섭' 동시 휴무 사전 방지 로직 ---
+                let anhan = parsedEmployees.find(e => e.name === '안한');
+                let choi = parsedEmployees.find(e => e.name === '최정섭');
+                if (anhan && choi) {
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        let anhanOff = anhan.reqOffsArr.includes(d) || anhan.ptoArr.includes(d);
+                        let choiOff = choi.reqOffsArr.includes(d) || choi.ptoArr.includes(d);
+                        
+                        if (anhanOff && choiOff) {
+                            warnings.push(`[절대 규칙] '안한'님과 '최정섭'님은 동시 휴무가 불가하여 ${d}일의 휴무 신청이 일부 강제 조정되었습니다.`);
+                            // 일반 휴무 요청을 우선 취소 (연차가 있다면 연차를 살림)
+                            if (anhan.reqOffsArr.includes(d)) {
+                                anhan.reqOffsArr = anhan.reqOffsArr.filter(day => day !== d);
+                            } else if (choi.reqOffsArr.includes(d)) {
+                                choi.reqOffsArr = choi.reqOffsArr.filter(day => day !== d);
+                            } else {
+                                // 둘 다 연차를 낸 극단적인 상황이면 최정섭님의 연차를 강제 취소
+                                choi.ptoArr = choi.ptoArr.filter(day => day !== d);
+                            }
+                        }
+                    }
+                }
+
+                // 특정 날짜의 근무 시간 구하는 헬퍼 함수
+                const getShiftForDay = (emp, day, startDay) => {
+                    let w = Math.floor((startDay + day - 1) / 7);
+                    if (w === 0) return emp.shiftW1;
+                    if (w === 1) return emp.shiftW2;
+                    if (w === 2) return emp.shiftW3;
+                    if (w === 3) return emp.shiftW4;
+                    return emp.shiftW5; // 5주차 이상(w>=4)은 5주차 설정 따름
+                };
+
+                // 스케줄 카운트에 포함되는 유효 근무자 판단 함수 (7:30 근무자 제외)
+                const isEffectiveWorker = (emp, day, startDay) => {
+                    return getShiftForDay(emp, day, startDay) !== '07:30 - 16:30';
+                };
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    let effectiveEmpCount = parsedEmployees.filter(e => isEffectiveWorker(e, d, startDay)).length;
+                    let absentEffectiveCount = parsedEmployees.filter(e => (e.reqOffsArr.includes(d) || e.ptoArr.includes(d)) && isEffectiveWorker(e, d, startDay)).length;
+                    
+                    if (effectiveEmpCount - absentEffectiveCount < 4) {
+                        warnings.push(`${d}일에 유효 스케줄 근무자의 휴무/연차 요청자가 많습니다. 최소 인원(4명) 보장을 위해 일부 일반 휴무가 강제 취소될 수 있습니다.`);
+                    }
+                    
+                    let requestedWorkers = parsedEmployees.filter(e => !e.reqOffsArr.includes(d) && !e.ptoArr.includes(d));
+                    let requestedClosers = requestedWorkers.filter(e => getShiftForDay(e, d, startDay) === '12:00 - 21:00').length;
+                    if (requestedClosers < 1) {
+                        warnings.push(`${d}일에 마감(12:00 - 21:00) 근무자의 휴무/연차가 겹쳐, 마감 인원 보장을 위해 일부 일반 휴무가 강제 취소될 수 있습니다.`);
+                    }
+                }
+
+                let finalOffs = {}; 
+                let finalPtos = {};
+                parsedEmployees.forEach(e => {
+                    finalOffs[e.id] = new Set(e.reqOffsArr);
+                    finalPtos[e.id] = new Set(e.ptoArr);
+                });
+                
+                let days = Array.from({length: daysInMonth}, (_, i) => i + 1);
+
+                // --- NEW: 특정 인원 동시 휴무 여부 확인 헬퍼 함수 ---
+                const isRestrictedPair = (empId, day) => {
+                    let emp = parsedEmployees.find(e => e.id === empId);
+                    if (!emp) return false;
+                    if (emp.name === '안한' || emp.name === '최정섭') {
+                        let otherName = emp.name === '안한' ? '최정섭' : '안한';
+                        let otherEmp = parsedEmployees.find(e => e.name === otherName);
+                        if (otherEmp) {
+                            if ((finalOffs[otherEmp.id] && finalOffs[otherEmp.id].has(day)) || 
+                                (finalPtos[otherEmp.id] && finalPtos[otherEmp.id].has(day))) {
+                                return true; // 상대방이 이미 쉬는 날임
+                            }
+                        }
+                    }
+                    return false;
+                };
+
+                // --- NEW: 스케줄 패턴 분석 헬퍼 함수 ---
+                const analyzeSchedule = (empId, addDay = null, removeDay = null) => {
+                    let maxWorkStreak = 0;
+                    let maxOffStreak = 0;
+                    let streaks1 = 0; // 핑퐁(1일 단위 고립된 근무/휴무) 패턴 카운트
+                    let currentType = null; // true: 휴무, false: 근무
+                    let currentLen = 0;
+
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        let isOff = finalOffs[empId].has(d) || finalPtos[empId].has(d);
+                        if (d === addDay) isOff = true;
+                        if (d === removeDay) isOff = false;
+
+                        if (currentType === isOff) {
+                            currentLen++;
+                        } else {
+                            if (currentLen === 1 && currentType !== null) streaks1++;
+                            if (currentType === false) maxWorkStreak = Math.max(maxWorkStreak, currentLen);
+                            if (currentType === true) maxOffStreak = Math.max(maxOffStreak, currentLen);
+                            currentType = isOff;
+                            currentLen = 1;
+                        }
+                    }
+                    if (currentLen === 1) streaks1++;
+                    if (currentType === false) maxWorkStreak = Math.max(maxWorkStreak, currentLen);
+                    if (currentType === true) maxOffStreak = Math.max(maxOffStreak, currentLen);
+
+                    return { maxWorkStreak, maxOffStreak, streaks1 };
+                };
+
+                parsedEmployees.forEach(emp => {
+                    let needed = totalOffDays - finalOffs[emp.id].size;
+                    
+                    while (needed > 0) {
+                        let candidateDays = days.filter(d => !finalOffs[emp.id].has(d) && !finalPtos[emp.id].has(d));
+                        
+                        // [추가] 상대방(안한/최정섭)이 쉬는 날은 후보에서 원천 제외
+                        candidateDays = candidateDays.filter(d => !isRestrictedPair(emp.id, d));
+                        
+                        candidateDays.sort((a, b) => {
+                            let statA = analyzeSchedule(emp.id, a, null);
+                            let statB = analyzeSchedule(emp.id, b, null);
+                            
+                            let scoreA = 0;
+                            let scoreB = 0;
+                            
+                            // 1. [절대 규칙] 연속 근무 4일 초과 시 기하급수적 패널티 (가장 중요)
+                            // maxWorkStreak가 작아지는 날짜를 최우선으로 선택하여 긴 연속 근무를 쪼갭니다.
+                            scoreA -= Math.pow(statA.maxWorkStreak, 3) * 1000;
+                            scoreB -= Math.pow(statB.maxWorkStreak, 3) * 1000;
+                            
+                            // 2. 연속 휴무 3일 초과 방지 패널티
+                            if (statA.maxOffStreak > 3) scoreA -= 50000;
+                            if (statB.maxOffStreak > 3) scoreB -= 50000;
+                            
+                            // 3. 핑퐁(1일 근무/휴무) 최소화
+                            scoreA -= statA.streaks1 * 500;
+                            scoreB -= statB.streaks1 * 500;
+                            
+                            // 4. 하루 근무 인원 밸런스 유지 (근무자가 많은 날 쉴 수 있도록 가산점)
+                            let wA = parsedEmployees.filter(e => !finalOffs[e.id].has(a) && !finalPtos[e.id].has(a)).length;
+                            let wB = parsedEmployees.filter(e => !finalOffs[e.id].has(b) && !finalPtos[e.id].has(b)).length;
+                            scoreA += wA * 10;
+                            scoreB += wB * 10;
+                            
+                            if (scoreA === scoreB) return Math.random() - 0.5; // 동점 시 랜덤
+                            return scoreB - scoreA;
+                        });
+
+                        let assigned = false;
+                        
+                        // 1차 시도: 하루 최소 인원(4명)과 마감조(1명)를 지키면서 휴무 배치
+                        for (let d of candidateDays) {
+                            let workersThatDay = parsedEmployees.filter(e => !finalOffs[e.id].has(d) && !finalPtos[e.id].has(d));
+                            let effectiveWorkersThatDay = workersThatDay.filter(e => isEffectiveWorker(e, d, startDay)).length;
+                            let closersThatDay = workersThatDay.filter(e => getShiftForDay(e, d, startDay) === '12:00 - 21:00').length;
+                            let isEmpCloser = getShiftForDay(emp, d, startDay) === '12:00 - 21:00';
+                            let isGhost = !isEffectiveWorker(emp, d, startDay);
+                            
+                            if ((isGhost || effectiveWorkersThatDay > 4) && (!isEmpCloser || closersThatDay > 1)) {
+                                finalOffs[emp.id].add(d);
+                                assigned = true;
+                                needed--;
+                                break;
+                            }
+                        }
+                        
+                        // 2차 시도 (강제 배정): 만약 인원 제한 때문에 휴무를 못 넣었다면, '연속 근무 4일 방지'를 위해 인원 조건을 무시하고 일단 1순위 날짜에 강제 휴무 배정
+                        // (이후 휴무 취소 로직에서 인원이 부족한 날의 다른 사람 휴무를 취소하여 밸런스를 맞춤)
+                        if (!assigned && candidateDays.length > 0) {
+                            finalOffs[emp.id].add(candidateDays[0]);
+                            assigned = true;
+                            needed--;
+                        }
+                        
+                        if (!assigned) break; // 안전 장치
+                    }
+                });
+
+                // 강제 휴무 취소 시 대체 휴무일 배정 함수
+                const assignAlternateDay = (forcedWorker, originalDay) => {
+                    let alternateDays = days.filter(ad => !finalOffs[forcedWorker.id].has(ad) && !finalPtos[forcedWorker.id].has(ad));
+                    
+                    // [추가] 대체 휴무일을 찾을 때도 상대방이 쉬는 날은 배정 제외
+                    alternateDays = alternateDays.filter(ad => !isRestrictedPair(forcedWorker.id, ad));
+
+                    alternateDays.sort((a, b) => {
+                        let statA = analyzeSchedule(forcedWorker.id, a, null);
+                        let statB = analyzeSchedule(forcedWorker.id, b, null);
+                        
+                        let scoreA = 0; let scoreB = 0;
+                        scoreA -= Math.pow(statA.maxWorkStreak, 3) * 1000;
+                        scoreB -= Math.pow(statB.maxWorkStreak, 3) * 1000;
+                        if (statA.maxOffStreak > 3) scoreA -= 50000;
+                        if (statB.maxOffStreak > 3) scoreB -= 50000;
+                        scoreA -= statA.streaks1 * 500;
+                        scoreB -= statB.streaks1 * 500;
+                        
+                        let wA = parsedEmployees.filter(e => !finalOffs[e.id].has(a) && !finalPtos[e.id].has(a)).length;
+                        let wB = parsedEmployees.filter(e => !finalOffs[e.id].has(b) && !finalPtos[e.id].has(b)).length;
+                        scoreA += wA * 10; scoreB += wB * 10;
+                        
+                        if (scoreA === scoreB) return Math.random() - 0.5;
+                        return scoreB - scoreA; 
+                    });
+                    
+                    let reassigned = false;
+                    for (let ad of alternateDays) {
+                        let workersOnAd = parsedEmployees.filter(e => !finalOffs[e.id].has(ad) && !finalPtos[e.id].has(ad));
+                        let effectiveWorkersOnAd = workersOnAd.filter(e => isEffectiveWorker(e, ad, startDay)).length;
+                        let closersOnAd = workersOnAd.filter(e => getShiftForDay(e, ad, startDay) === '12:00 - 21:00').length;
+                        let isCloserOnAd = getShiftForDay(forcedWorker, ad, startDay) === '12:00 - 21:00';
+                        let isGhostOnAd = !isEffectiveWorker(forcedWorker, ad, startDay);
+
+                        if ((isGhostOnAd || effectiveWorkersOnAd > 4) && (!isCloserOnAd || closersOnAd > 1)) {
+                            finalOffs[forcedWorker.id].add(ad);
+                            warnings.push(`${forcedWorker.name}님의 휴무가 ${originalDay}일에서 ${ad}일로 변경 대체되었습니다.`);
+                            reassigned = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!reassigned && alternateDays.length > 0) {
+                        finalOffs[forcedWorker.id].add(alternateDays[0]);
+                        warnings.push(`${forcedWorker.name}님의 휴무가 ${originalDay}일에서 ${alternateDays[0]}일로 강제 변경되었습니다. (최소 근무 인원이 일시 부족할 수 있음)`);
+                        reassigned = true;
+                    }
+                };
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    let workers = parsedEmployees.filter(e => !finalOffs[e.id].has(d) && !finalPtos[e.id].has(d));
+                    let closers = workers.filter(e => getShiftForDay(e, d, startDay) === '12:00 - 21:00');
+
+                    // 1. 마감 인원 부족 시 "일반 휴무" 강제 취소
+                    while (closers.length < 1) {
+                        let forcedCloser = parsedEmployees.find(e => {
+                            if (!finalOffs[e.id].has(d)) return false;
+                            if (getShiftForDay(e, d, startDay) !== '12:00 - 21:00') return false;
+                            
+                            // [절대 방어] 휴무를 취소했을 때 연속 근무가 4일을 초과하게 되면 절대 취소 불가!
+                            if (analyzeSchedule(e.id, null, d).maxWorkStreak > 4) return false;
+
+                            return true;
+                        });
+
+                        if (forcedCloser) {
+                            warnings.push(`마감(12:00-21:00) 필수 인원 보장을 위해 ${forcedCloser.name}님의 ${d}일 일반 휴무가 취소되었습니다.`);
+                            finalOffs[forcedCloser.id].delete(d);
+                            assignAlternateDay(forcedCloser, d);
+                        } else {
+                            warnings.push(`${d}일에 마감(12:00-21:00) 근무 가능자가 부족하나, '연속 4일 근무 초과 방지 절대 규칙'으로 인해 더 이상 인원 휴무를 취소할 수 없습니다.`);
+                            break;
+                        }
+                        workers = parsedEmployees.filter(e => !finalOffs[e.id].has(d) && !finalPtos[e.id].has(d));
+                        closers = workers.filter(e => getShiftForDay(e, d, startDay) === '12:00 - 21:00');
+                    }
+
+                    // 2. 최소 인원 부족 시 "일반 휴무" 강제 취소 (7:30 근무자는 제외)
+                    let effectiveWorkers = workers.filter(e => isEffectiveWorker(e, d, startDay));
+                    while (effectiveWorkers.length < 4) {
+                        let forcedWorker = parsedEmployees.find(e => {
+                            if (!finalOffs[e.id].has(d)) return false;
+                            if (!isEffectiveWorker(e, d, startDay)) return false;
+                            
+                            // [절대 방어] 휴무를 취소했을 때 연속 근무가 4일을 초과하게 되면 절대 취소 불가!
+                            if (analyzeSchedule(e.id, null, d).maxWorkStreak > 4) return false;
+
+                            return true;
+                        });
+
+                        if (forcedWorker) {
+                            warnings.push(`최소 유효 근무 인원(4명) 보장을 위해 ${forcedWorker.name}님의 ${d}일 일반 휴무가 취소되었습니다.`);
+                            finalOffs[forcedWorker.id].delete(d);
+                            assignAlternateDay(forcedWorker, d);
+                        } else {
+                            warnings.push(`${d}일에 유효 인원이 부족하나, '연속 4일 근무 초과 방지 절대 규칙'으로 인해 더 이상 직원들의 휴무를 강제 취소할 수 없습니다. 수동 확인 바랍니다.`);
+                            break;
+                        }
+                        workers = parsedEmployees.filter(e => !finalOffs[e.id].has(d) && !finalPtos[e.id].has(d));
+                        effectiveWorkers = workers.filter(e => isEffectiveWorker(e, d, startDay));
+                    }
+                }
+
+                generatedSchedule = [];
+                employeeStats = {};
+                parsedEmployees.forEach(e => employeeStats[e.id] = { name: e.name, work: 0, off: 0, pto: 0 });
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    let w = Math.floor((startDay + d - 1) / 7); 
+                    let dayData = { day: d, workers: [], offs: [], ptos: [] };
+                    
+                    parsedEmployees.forEach(emp => {
+                        if (finalPtos[emp.id].has(d)) {
+                            dayData.ptos.push(emp.name);
+                            employeeStats[emp.id].pto++;
+                        } else if (finalOffs[emp.id].has(d)) {
+                            dayData.offs.push(emp.name);
+                            employeeStats[emp.id].off++;
+                        } else {
+                            let shift = getShiftForDay(emp, d, startDay);
+                            dayData.workers.push({ name: emp.name, shift: shift });
+                            employeeStats[emp.id].work++;
+                        }
+                    });
+                    
+                    let groupedWorkers = {};
+                    dayData.workers.forEach(w => {
+                        if (!groupedWorkers[w.shift]) groupedWorkers[w.shift] = [];
+                        groupedWorkers[w.shift].push(w.name);
+                    });
+                    dayData.groupedWorkers = groupedWorkers;
+
+                    generatedSchedule.push(dayData);
+                }
+
+                if (warnings.length > 0) {
+                    warningsContainer.innerHTML = `
+                        <div class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl shadow-sm">
+                            <div class="flex items-center gap-2 font-semibold mb-1">
+                                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                알림 및 자동 조정 내역
+                            </div>
+                            <ul class="list-disc list-inside text-sm space-y-0.5 ml-2">
+                                ${[...new Set(warnings)].map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                    warningsContainer.classList.remove('hidden');
+                }
+
+                renderResults();
+                saveState();
+            }
+
+            // Render the results (Calendar & Stats)
+            function renderResults() {
+                resultsContainer.classList.remove('hidden');
+                
+                const { startDay, daysInMonth, holidaySet } = currentMonthInfo;
+                
+                statsContainer.innerHTML = Object.values(employeeStats).map(stat => `
+                    <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                        <div class="text-sm font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                            ${stat.name}
+                            ${stat.pto > 0 ? `<span class="px-1.5 py-0.5 bg-pink-100 text-pink-600 rounded text-xs">연차 ${stat.pto}</span>` : ''}
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <span class="text-2xl font-bold text-slate-800">${stat.work}<span class="text-sm font-normal text-slate-500">일 근무</span></span>
+                            <span class="text-sm font-medium text-red-500 mb-1">${stat.off}일 휴무</span>
+                        </div>
+                    </div>
+                `).join('');
+
+                let totalWorkDays = Object.values(employeeStats).reduce((sum, s) => sum + s.work, 0);
+                let avgWorkers = (totalWorkDays / daysInMonth).toFixed(1);
+                
+                statsContainer.innerHTML += `
+                    <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm flex flex-col justify-center">
+                        <div class="text-sm font-semibold text-indigo-600 mb-1">일 평균 근무 인원</div>
+                        <div class="flex items-end gap-2">
+                            <span class="text-2xl font-bold text-indigo-900">${avgWorkers}<span class="text-sm font-normal text-indigo-700">명</span></span>
+                            <span class="text-sm font-medium text-indigo-600 mb-1">/일</span>
+                        </div>
+                    </div>
+                `;
+
+                let calendarHTML = `
+                    <div class="bg-slate-50 py-2 text-center text-red-500 font-semibold text-sm">일</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">월</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">화</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">수</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">목</div>
+                    <div class="bg-slate-50 py-2 text-center text-slate-700 font-semibold text-sm">금</div>
+                    <div class="bg-slate-50 py-2 text-center text-blue-500 font-semibold text-sm">토</div>
+                `;
+
+                for (let i = 0; i < startDay; i++) {
+                    calendarHTML += `<div class="bg-slate-50/30 min-h-[160px] p-2 calendar-cell border-b border-r border-slate-200"></div>`;
+                }
+
+                generatedSchedule.forEach(dayInfo => {
+                    let dateColor = 'text-slate-700';
+                    let dayOfWeek = (startDay + dayInfo.day - 1) % 7; 
+                    if (dayOfWeek === 0) dateColor = 'text-red-500';
+                    if (dayOfWeek === 6) dateColor = 'text-blue-500';
+                    if (holidaySet.has(dayInfo.day)) dateColor = 'text-red-500'; 
+
+                    let shiftsHTML = '';
+                    shifts.forEach(s => {
+                        if (dayInfo.groupedWorkers[s]) {
+                            shiftsHTML += `
+                                <div class="bg-white border border-slate-100 rounded-md p-1.5 mb-1.5 shadow-sm">
+                                    <div class="text-[10px] font-bold text-slate-500 mb-0.5 flex items-center">
+                                        ${getShiftBadge(s)}
+                                    </div>
+                                    <div class="text-[11px] text-slate-800 font-medium leading-tight break-keep">
+                                        ${dayInfo.groupedWorkers[s].join(', ')}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+
+                    let ptosHTML = dayInfo.ptos.length > 0 
+                        ? `<div class="mt-1 pt-1.5 border-t border-slate-200">
+                               <div class="text-[10px] font-bold text-pink-500 flex items-center mb-0.5">
+                                   <span class="inline-block w-1.5 h-1.5 rounded-full bg-pink-500 mr-1"></span>연차
+                               </div>
+                               <div class="text-[11px] text-pink-700 font-medium">${dayInfo.ptos.join(', ')}</div>
+                           </div>` 
+                        : '';
+
+                    let offsHTML = dayInfo.offs.length > 0 
+                        ? `<div class="mt-1 pt-1.5 border-t border-slate-200">
+                               <div class="text-[10px] font-bold text-red-400 flex items-center mb-0.5">
+                                   <span class="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mr-1"></span>휴무
+                               </div>
+                               <div class="text-[11px] text-slate-500 font-medium">${dayInfo.offs.join(', ')}</div>
+                           </div>` 
+                        : '';
+
+                    let effectiveCount = dayInfo.workers.filter(w => w.shift !== '07:30 - 16:30').length;
+                    let workerCountBadge = `<span class="float-right text-[10px] px-1.5 py-0.5 rounded-full ${effectiveCount < 4 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}">유효 ${effectiveCount}명 근무</span>`;
+
+                    calendarHTML += `
+                        <div class="bg-white min-h-[160px] p-2 hover:bg-slate-50 transition-colors calendar-cell flex flex-col border-b border-r border-slate-200">
+                            <div class="font-bold ${dateColor} mb-2 flex justify-between items-center">
+                                <span>${dayInfo.day}</span>
+                                ${workerCountBadge}
+                            </div>
+                            <div class="flex-grow space-y-1">
+                                ${shiftsHTML}
+                            </div>
+                            <div class="mt-auto">
+                                ${ptosHTML}
+                                ${offsHTML}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                let remainingCells = (startDay + daysInMonth) % 7;
+                if (remainingCells > 0) {
+                    for (let i = 0; i < (7 - remainingCells); i++) {
+                        calendarHTML += `<div class="bg-slate-50/30 min-h-[160px] p-2 calendar-cell border-b border-slate-200 ${i !== (7 - remainingCells - 1) ? 'border-r' : ''}"></div>`;
+                    }
+                }
+
+                calendarGrid.innerHTML = calendarHTML;
+            }
+
+            // Return public methods
+            return {
+                updateEmployee,
+                addEmployee,
+                removeEmployee,
+                generateSchedule,
+                init: async function() {
+                    initControls();
+                    renderTable();
+                    
+                    yearSelect.addEventListener('change', saveState);
+                    monthSelect.addEventListener('change', saveState);
+                    holidaysInput.addEventListener('change', saveState);
+
+                    const fbReady = await initFirebase();
+                    if (fbReady) {
+                        await loadState();
+                    }
+                }
+            };
+        })();
+
+        // Make app globally available for inline HTML handlers
+        window.app = app;
+        
+        // Initialize app and load data
+        app.init();
+    </script>
+</body>
+</html>
